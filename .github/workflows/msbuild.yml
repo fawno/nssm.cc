@@ -1,0 +1,81 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: MSBuild
+
+on: [push, pull_request]
+
+env:
+  # Path to the solution file relative to the root of the project.
+  SOLUTION_FILE_PATH: .
+
+  # Configuration type to build.
+  # You can convert this to a build matrix if you need coverage of multiple configuration types.
+  # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  BUILD_CONFIGURATION: Release
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        arch: [Win32, Win64]
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Extract Version
+      shell: powershell
+      run: |
+        chcp 65001
+        $v = git describe --tags --long
+        if (("${{github.ref}}").StartsWith("refs/tags")) {
+          $r = $v | Select-String -Pattern "^(.*)-\d+-[\d\w]+" -AllMatches
+          $v = $r.Matches[0].Groups[1].Value
+        }
+        echo "$v"
+        $nssm_version = 'NSSM_VERSION=' + $v
+        echo $nssm_version >> $env:GITHUB_ENV
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Restore NuGet packages
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      # Add additional options to the MSBuild command line here (like platform or verbosity level).
+      # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{matrix.arch}} ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: nssm-${{env.NSSM_VERSION}}-${{matrix.arch}}
+        path: out\${{env.BUILD_CONFIGURATION}}\${{matrix.arch}}
+
+    - name: Compress files
+      shell: powershell
+      run: |
+        chcp 65001
+        $dir = (Get-Location).Path
+        $compress = @{
+          Path = "${dir}\out\${{env.BUILD_CONFIGURATION}}\${{matrix.arch}}\nssm.exe", "${dir}\ChangeLog.txt", "${dir}\README.md", "${dir}\README.txt", "${dir}\LICENSE"
+          CompressionLevel = "Fastest"
+          DestinationPath = "${dir}\nssm-${{env.NSSM_VERSION}}-${{matrix.arch}}.zip"
+        }
+        Compress-Archive @compress
+
+    - name: Publish Binaries to Release
+      if: ${{ startsWith(github.ref, 'refs/tags') }}
+      uses: svenstaro/upload-release-action@v2
+      with:
+        asset_name: nssm-${{env.NSSM_VERSION}}-${{matrix.arch}}.zip
+        file: nssm-${{env.NSSM_VERSION}}-${{matrix.arch}}.zip
