@@ -67,7 +67,7 @@ jobs:
         chcp 65001
         $dir = (Get-Location).Path
         $compress = @{
-          Path = "${dir}\out\${{env.BUILD_CONFIGURATION}}\${{matrix.arch}}\nssm.exe", "${dir}\ChangeLog.txt", "${dir}\README.md", "${dir}\README.txt", "${dir}\LICENSE"
+          Path = "${dir}\out\${{env.BUILD_CONFIGURATION}}\${{matrix.arch}}\nssm.exe", "${dir}\out\${{env.BUILD_CONFIGURATION}}\${{matrix.arch}}\nssm.pdb", "${dir}\ChangeLog.txt", "${dir}\README.md", "${dir}\README.txt", "${dir}\LICENSE"
           CompressionLevel = "Fastest"
           DestinationPath = "${dir}\nssm-${{env.NSSM_VERSION}}-${{matrix.arch}}.zip"
         }
